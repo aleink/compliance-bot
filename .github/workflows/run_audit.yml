@@ -7,11 +7,14 @@ on:
 jobs:
   audit:
     runs-on: ubuntu-latest
+
     steps:
+      # ───── Step 1: get the code ──────────────────────────
       - name: Check out repo
         uses: actions/checkout@v4
 
-       - name: Set up Python
+      # ───── Step 2: run the audit script ─────────────────
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -28,3 +31,21 @@ jobs:
         run: |
           echo "Scanning $SITE_URL"
           python audit.py "$SITE_URL"
+
+      # ───── Step 3: convert the Markdown report to PDF ───
+      - name: Install wkhtmltopdf
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wkhtmltopdf
+
+      - name: Generate PDF from Markdown
+        run: |
+          MD_FILE=$(ls -1t output/*.md | head -n1)   # newest .md
+          echo "Converting $MD_FILE to PDF"
+          python make_pdf.py "$MD_FILE"
+
+      # ───── TODO: Step 4 – upload PDF to R2 and capture URL ─────
+      #           (will add upload_r2.py call and set an output)
+
+      # ───── TODO: Step 5 – email the presigned link to customer ─
+      #           (Brevo / Postmark API call goes here)
