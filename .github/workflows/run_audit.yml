@@ -44,8 +44,15 @@ jobs:
           echo "Converting $MD_FILE to PDF"
           python make_pdf.py "$MD_FILE"
 
-      # ───── TODO: Step 4 – upload PDF to R2 and capture URL ─────
-      #           (will add upload_r2.py call and set an output)
+      - name: Upload PDF to R2
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_ACCESS_KEY_ID: ${{ secrets.CF_ACCESS_KEY_ID }}
+          CF_SECRET_ACCESS_KEY: ${{ secrets.CF_SECRET_ACCESS_KEY }}
+        run: |
+          PDF_FILE=$(ls -1t output/*.pdf | head -n1)   # newest PDF
+          echo "Uploading $PDF_FILE"
+          python upload_r2.py "$PDF_FILE" | tee r2_link.txt
 
       # ───── TODO: Step 5 – email the presigned link to customer ─
       #           (Brevo / Postmark API call goes here)
