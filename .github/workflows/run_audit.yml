@@ -7,19 +7,22 @@ on:
 jobs:
   audit:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
 
     steps:
-      # ── Step 1: check out the repository ──────────────────────────
-      - name: Check out repo
+      # ── 1 · Check out the repo ──────────────────────────────
+      - name: Check out repository
         uses: actions/checkout@v4
 
-      # ── Step 2: set up Python and run audit.py ────────────────────
+      # ── 2 · Set up Python & deps, then run audit.py ────────
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
-      - name: Install requirements
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install playwright==1.* markdown boto3
@@ -32,19 +35,19 @@ jobs:
           echo "Scanning $SITE_URL"
           python audit.py "$SITE_URL"
 
-      # ── Step 3: convert Markdown → PDF ────────────────────────────
+      # ── 3 · Convert the Markdown report to PDF ─────────────
       - name: Install wkhtmltopdf
         run: |
-          sudo apt-get update
+          sudo apt-get update -y
           sudo apt-get install -y wkhtmltopdf
 
-      - name: Generate PDF from Markdown
+      - name: Generate PDF
         run: |
           MD_FILE=$(ls -1t output/*.md | head -n1)
           echo "Converting $MD_FILE to PDF"
           python make_pdf.py "$MD_FILE"
 
-      # ── Step 4: upload PDF to R2 ──────────────────────────────────
+      # ── 4 · Upload PDF to Cloudflare R2 ────────────────────
       - name: Upload PDF to R2
         env:
           CF_ACCOUNT_ID:        ${{ secrets.CF_ACCOUNT_ID }}
@@ -55,5 +58,5 @@ jobs:
           echo "Uploading $PDF_FILE"
           python upload_r2.py "$PDF_FILE" | tee r2_link.txt
 
-      # ── Step 5: TODO – email the link with Brevo ──────────────────
-      # (we’ll add this in the next step)
+      # ── 5 · (Next step) email presigned link to customer ───
+      # TODO: add Brevo send‑email step here
