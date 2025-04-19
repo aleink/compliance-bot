@@ -1,0 +1,16 @@
+name: Run audit and deliver report
+
+on:
+  repository_dispatch:
+    types: [run_audit]
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      # TODO: set up Python, run audit.py, make PDF
+      # TODO: upload PDF to R2 and capture presigned URL
+      # TODO: email the link to the customer
