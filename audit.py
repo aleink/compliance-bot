@@ -1,7 +1,6 @@
 # ---------- audit.py ----------
 """
-Run Playwright + axe‑core, save results to ./output/
-Creates:
+Playwright + axe‑core scan.  Outputs (in ./output):
   • axe-results-<ts>.json
   • report-<ts>.md
   • screenshot-<ts>.png
@@ -11,15 +10,12 @@ import sys, os, json, time, asyncio
 from pathlib import Path
 from playwright.async_api import async_playwright, Error as PwError
 
-# ── URL input & guard --------------------------------------------------
 SITE = os.getenv("SITE_URL") or (sys.argv[1] if len(sys.argv) > 1 else "")
 if not SITE.strip():
     sys.exit("❌  No site URL provided – dispatch payload missing 'site'")
 
-# ── output directory ---------------------------------------------------
 OUTPUT = Path("output"); OUTPUT.mkdir(exist_ok=True)
 
-# ── main audit routine -------------------------------------------------
 async def run_audit(url: str):
     ts = int(time.time())
     axe_json = OUTPUT / f"axe-results-{ts}.json"
@@ -34,16 +30,28 @@ async def run_audit(url: str):
             await page.goto(url, timeout=120_000)
             await page.screenshot(path=png_file, full_page=True)
 
-            # inject axe‑core (local fallback)
+            # inject axe-core (local first, then CDN)
+            injected = False
             try:
                 await page.add_script_tag(path="assets/axe.min.js")
+                injected = True
             except PwError:
-                await page.add_script_tag(
-                    url="https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.9.3/axe.min.js"
-                )
+                try:
+                    await page.add_script_tag(
+                        url="https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.9.3/axe.min.js"
+                    )
+                    injected = True
+                except PwError:
+                    pass
 
-            # ✅ call axe.run() via async wrapper
-            results = await page.evaluate("async () => await axe.run()")
+            if not injected:
+                sys.exit("❌  Unable to inject axe-core")
+
+            # wait until window.axe exists (up to 10 s)
+            await page.wait_for_function("window.axe !== undefined", timeout=10_000)
+
+            # run axe
+            results = await page.evaluate("async () => await window.axe.run()")
             axe_json.write_text(json.dumps(results, indent=2), encoding="utf-8")
 
     except PwError as e:
@@ -60,7 +68,6 @@ async def run_audit(url: str):
     print(f"✅  Saved Markdown   → {md_file}")
     print(f"✅  Saved screenshot → {png_file}")
 
-# ── entrypoint ---------------------------------------------------------
 if __name__ == "__main__":
     asyncio.run(run_audit(SITE))
 # ----------------------------------------------------------------------
