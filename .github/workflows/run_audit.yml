@@ -11,37 +11,42 @@ jobs:
     defaults: { run: { shell: bash } }
 
     steps:
-    # 1 · Code checkout ----------------------------------------------
+    # 1 · Code checkout -------------------------------------------------
     - name: Check out repo
       uses: actions/checkout@v4
 
-    # 2 · Python + Playwright, run audit ------------------------------
+    # 2 · Python + Playwright, run audit.py -----------------------------
     - name: Set up Python
       uses: actions/setup-python@v5
       with: { python-version: '3.11' }
 
     - name: Install deps & scan
       run: |
-        python -m pip install -U pip
+        python -m pip install --upgrade pip
         pip install playwright==1.* markdown boto3 tabulate
         python -m playwright install chromium
         python "$GITHUB_WORKSPACE/audit.py" "${{ github.event.client_payload.site }}"
 
-    # DEBUG – confirm the site arg -----------------------------------
-    - name: DEBUG – show site argument
-      run: echo ">>> client_payload.site = '${{ github.event.client_payload.site }}'"
+    # 3 · List workspace so we can see what was produced ---------------
+    - name: List workspace after scan
+      run: |
+        echo "── workspace tree ───────────"
+        find "$GITHUB_WORKSPACE" -maxdepth 2 -type f
+        echo "─────────────────────────────"
 
-    # 3 · Markdown → PDF ---------------------------------------------
+    # 4 · Markdown → PDF  (only if a .md file exists) ------------------
     - name: Install wkhtmltopdf
       run: sudo apt-get update -y && sudo apt-get install -y wkhtmltopdf
 
     - name: Convert to PDF
+      if: ${{ hashFiles('output/*.md') != '' }}
       run: |
         MD=$(ls -1t output/*.md | head -n1)
         python "$GITHUB_WORKSPACE/make_pdf.py" "$MD"
 
-    # 4 · Upload PDF to R2 -------------------------------------------
+    # 5 · Upload PDF to R2  (only if the PDF exists) -------------------
     - name: Upload to R2
+      if: ${{ hashFiles('output/*.pdf') != '' }}
       env:
         CF_ACCOUNT_ID:        "800db2c8e8b92e64cca02cd905748115"
         CF_ACCESS_KEY_ID:     "a5b6d2a40c1a249f58056642344ded1c"
@@ -50,7 +55,8 @@ jobs:
         PDF=$(ls -1t output/*.pdf | head -n1)
         python "$GITHUB_WORKSPACE/upload_r2.py" "$PDF" | tee r2_link.txt
 
-    # 5 · Print presigned link ---------------------------------------
+    # 6 · Print link (only when we really have one) --------------------
     - name: Print presigned link
+      if: ${{ hashFiles('output/*.pdf') != '' }}
       run: cat r2_link.txt
-# ------------------------------------------------------
+# ---------------------------------------------------------------------
