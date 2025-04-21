@@ -1,0 +1,56 @@
+# ---------- .github/workflows/run_audit.yml ----------
+name: Run audit and deliver report
+
+on:
+  repository_dispatch:
+    types: [run_audit]
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    defaults: { run: { shell: bash } }
+
+    steps:
+    # 1 · Code checkout ----------------------------------------------
+    - name: Check out repo
+      uses: actions/checkout@v4
+
+    # 2 · Python + Playwright, run audit ------------------------------
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with: { python-version: '3.11' }
+
+    - name: Install deps & scan
+      run: |
+        python -m pip install -U pip
+        pip install playwright==1.* markdown boto3 tabulate
+        python -m playwright install chromium
+        python "$GITHUB_WORKSPACE/audit.py" "${{ github.event.client_payload.site }}"
+
+    # DEBUG – confirm the site arg -----------------------------------
+    - name: DEBUG – show site argument
+      run: echo ">>> client_payload.site = '${{ github.event.client_payload.site }}'"
+
+    # 3 · Markdown → PDF ---------------------------------------------
+    - name: Install wkhtmltopdf
+      run: sudo apt-get update -y && sudo apt-get install -y wkhtmltopdf
+
+    - name: Convert to PDF
+      run: |
+        MD=$(ls -1t output/*.md | head -n1)
+        python "$GITHUB_WORKSPACE/make_pdf.py" "$MD"
+
+    # 4 · Upload PDF to R2 -------------------------------------------
+    - name: Upload to R2
+      env:
+        CF_ACCOUNT_ID:        "800db2c8e8b92e64cca02cd905748115"
+        CF_ACCESS_KEY_ID:     "a5b6d2a40c1a249f58056642344ded1c"
+        CF_SECRET_ACCESS_KEY: "f9c56283992ce45272c78a3fc08e0b583a04150d65ec7e6db528afed3531358d"
+      run: |
+        PDF=$(ls -1t output/*.pdf | head -n1)
+        python "$GITHUB_WORKSPACE/upload_r2.py" "$PDF" | tee r2_link.txt
+
+    # 5 · Print presigned link ---------------------------------------
+    - name: Print presigned link
+      run: cat r2_link.txt
+# ------------------------------------------------------
